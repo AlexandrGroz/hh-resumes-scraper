@@ -1,6 +1,7 @@
 from pathlib import Path
-import pandas as pd
 from typing import Iterable, Mapping
+
+import pandas as pd
 
 
 def build_dataframe(records: Iterable[Mapping[str, str]] | None) -> pd.DataFrame:

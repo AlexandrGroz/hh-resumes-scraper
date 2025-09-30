@@ -1,5 +1,6 @@
-from configs.config import config
 from selenium.webdriver.common.by import By
+
+from configs.config import config
 from helpers.highlights import highlight_blocks
 
 

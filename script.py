@@ -12,7 +12,8 @@ def start_clicking_vacancies():
     login()
     set_advanced_search()
 
-    while config.counter < config.limit:
+    limit = getattr(config, "limit", 0)
+    while not limit or config.counter < limit:
         click_vacancies()
 
     config.driver.close()
@@ -23,12 +24,15 @@ def start_clicking_resumes():
     click_resumes()
 
 
-
 if __name__ == "__main__":
     if is_running_from_batch():
         os.system("cls")
 
-    config.driver.get("https://tyumen.hh.ru/search/resume")
-
-    #start_clicking_vacancies()
-    start_clicking_resumes()
+    try:
+        config.driver.get("https://tyumen.hh.ru/search/resume")
+        start_clicking_resumes()
+    finally:
+        try:
+            config.driver.quit()
+        except Exception:
+            pass
