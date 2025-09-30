@@ -23,10 +23,13 @@ class Config:
             #cls._instance.login_type = os.getenv("LOGIN_TYPE").lower()
             #cls._instance.phone = os.getenv("PHONE")
             #cls._instance.resume_id = os.getenv("RESUME_ID")
-            cls._instance.search_query = os.getenv("SEARCH_QUERY").lower()
+            search_query = os.getenv("SEARCH_QUERY", "")
+            cls._instance.search_query = search_query.lower()
             #cls._instance.search_exclude = os.getenv("SEARCH_EXCLUDE").lower()
             #cls._instance.region = os.getenv("REGION").lower()
             #cls._instance.limit = int(os.getenv("LIMIT"))
+            cls._instance.resume_records = []
+            cls._instance.output_path = os.getenv("OUTPUT_PATH", "data/resumes.csv")
 
         return cls._instance
 
