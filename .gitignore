@@ -77,3 +77,14 @@ celerybeat-schedule.db
 # Extra
 future_notes.txt
 hh_clicker_venv
+*.txt text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.pyi text eol=lf
+*.cfg text eol=lf
+*.ini text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.bat text eol=crlf
+Dockerfile text eol=lf

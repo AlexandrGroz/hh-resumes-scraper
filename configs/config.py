@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from selenium.webdriver import ActionChains
 from selenium.webdriver.support.wait import WebDriverWait
 from drivers.set_driver import set_driver
+
 load_dotenv()
 
 
@@ -23,8 +24,7 @@ class Config:
             #cls._instance.login_type = os.getenv("LOGIN_TYPE").lower()
             #cls._instance.phone = os.getenv("PHONE")
             #cls._instance.resume_id = os.getenv("RESUME_ID")
-            search_query = os.getenv("SEARCH_QUERY", "")
-            cls._instance.search_query = search_query.lower()
+            cls._instance.search_query = os.getenv("SEARCH_QUERY").lower()
             #cls._instance.search_exclude = os.getenv("SEARCH_EXCLUDE").lower()
             #cls._instance.region = os.getenv("REGION").lower()
             #cls._instance.limit = int(os.getenv("LIMIT"))

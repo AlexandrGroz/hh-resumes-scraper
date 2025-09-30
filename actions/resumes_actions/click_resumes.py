@@ -1,5 +1,6 @@
 import time
 
+from helpers.highlights import highlight_blocks
 from selenium.common import TimeoutException, NoSuchElementException
 
 from actions.resumes_actions.dataframe import build_dataframe, save_dataframe
@@ -23,8 +24,12 @@ def click_resumes():
 
         resume_links = []
         for resume in resumes_list:
-            apply_button = resume.find_element(By.XPATH, './/a[@data-qa="serp-item__title"]')
-            resume_links.append(apply_button.get_attribute('href'))
+            try:
+                apply_button = resume.find_element(By.XPATH, './/a[@data-qa="serp-item__title"]')
+                highlight_blocks([apply_button])   # лучше всегда передавать список
+                resume_links.append(apply_button.get_attribute('href'))
+            except Exception as e:
+                print(f"Не удалось найти ссылку в карточке: {e}")
 
         for link in resume_links:
             config.driver.execute_script("window.open(arguments[0], '_blank');", link)
