@@ -24,6 +24,7 @@ def parse_resume():
         "ready_to_relocate": safe_get_text(By.XPATH, '//p[@data-qa="resume-personal-relocation"]'),
         "travel_time": safe_get_text(By.XPATH, '//span[@data-qa="resume-personal-metro"]'),
         "updated_at": safe_get_text(By.XPATH, '//span[@data-qa="resume-updatedAt"]'),
+        "text": safe_get_text(By.XPATH, '//div[@data-qa="resume-block-skills-content"]')
     }
 
     return resume_data
