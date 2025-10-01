@@ -21,7 +21,8 @@ class ResumeDetailPage(BasePage):
     WORK_EXPERIENCE = (By.XPATH, '//div[@data-qa="resume-block-experience"]')
     EDUCATION = (By.XPATH, '//div[@data-qa="resume-block-education"]')
     LANGUAGES = (By.XPATH, '//span[@data-qa="resume-block-language-item"]')
-    SKILLS = (By.XPATH, '//span[@data-qa="skills-table-item"]')
+    SKILL_KEYWORDS = (By.XPATH, '//span[@data-qa="skills-table-item"]')
+    SELF_DESCRIPTION = (By.XPATH, '//div[@data-qa="resume-block-skills-content"]')
     CITIZENSHIP = (By.XPATH, '//span[@data-qa="resume-personal-citizenship"]')
     READY_TO_RELOCATE = (By.XPATH, '//p[@data-qa="resume-personal-relocation"]')
     TRAVEL_TIME = (By.XPATH, '//span[@data-qa="resume-personal-metro"]')
@@ -41,7 +42,12 @@ class ResumeDetailPage(BasePage):
             "work_experience": self.get_optional_text(self.WORK_EXPERIENCE, label="Work experience"),
             "education": self.get_optional_text(self.EDUCATION, label="Education"),
             "languages": self._join_texts(self.LANGUAGES, label="Languages"),
-            "skills": self._join_texts(self.SKILLS, label="Skills"),
+            "self_description": self.get_optional_text(
+                self.SELF_DESCRIPTION,
+                label="Self description",
+                timeout=1,
+            ),
+            "skill_keywords": self._join_texts(self.SKILL_KEYWORDS, label="Skill keywords"),
             "citizenship": self._join_texts(self.CITIZENSHIP, label="Citizenship"),
             "ready_to_relocate": self.get_optional_text(
                 self.READY_TO_RELOCATE, label="Relocation readiness"

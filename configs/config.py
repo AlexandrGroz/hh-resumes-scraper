@@ -23,11 +23,25 @@ class Config:
             cls._instance.driver = set_driver(cls._instance.driver_type)
             cls._instance.action = ActionChains(cls._instance.driver)
             cls._instance.wait = WebDriverWait(cls._instance.driver, cls._instance.wait_time)
-            cls._instance.search_query = os.getenv("SEARCH_QUERY", "")
+            raw_queries = os.getenv("SEARCH_QUERY", "")
+            cls._instance.search_queries = [
+                query.strip()
+                for query in raw_queries.split(",")
+                if query.strip()
+            ]
+            cls._instance.search_query = (
+                cls._instance.search_queries[0] if cls._instance.search_queries else ""
+            )
             cls._instance.limit = int(os.getenv("LIMIT", "0") or 0)
             cls._instance.resume_limit = int(os.getenv("RESUME_LIMIT", "500") or 500)
             cls._instance.resume_records = []
             cls._instance.output_path = os.getenv("OUTPUT_PATH", "data/resumes.csv")
+            resume_search_url = os.getenv("RESUME_SEARCH_URL")
+            if resume_search_url:
+                cls._instance.resume_search_url = resume_search_url
+            else:
+                base = cls._instance.base_page.rstrip("/")
+                cls._instance.resume_search_url = f"{base}/search/resume"
 
         return cls._instance
 

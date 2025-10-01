@@ -29,7 +29,6 @@ if __name__ == "__main__":
         os.system("cls")
 
     try:
-        config.driver.get("https://tyumen.hh.ru/search/resume")
         start_clicking_resumes()
     finally:
         try:

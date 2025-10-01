@@ -96,7 +96,8 @@ class BasePage:
         default: str = "",
     ) -> str:
         try:
-            return self.get_text(locator, label=label, timeout=timeout or self.timeout)
+            effective_timeout = timeout if timeout is not None else min(self.timeout, 2)
+            return self.get_text(locator, label=label, timeout=effective_timeout)
         except TimeoutException:
             logger.info("Optional element %s not found; returning default", label or describe_locator(locator))
             return default

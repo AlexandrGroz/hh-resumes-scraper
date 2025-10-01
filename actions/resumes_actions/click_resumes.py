@@ -1,4 +1,13 @@
-from actions.resumes_actions.dataframe import build_dataframe, save_dataframe
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Dict, List, MutableSet
+
+from actions.resumes_actions.dataframe import (
+    append_record,
+    load_existing_ids,
+    query_output_path,
+)
 from actions.resumes_actions.find_resumes import find_resumes
 from actions.resumes_actions.parse_resume import parse_resume
 from actions.resumes_actions.setup_search import setup_search
@@ -6,17 +15,30 @@ from configs.config import config
 from helpers.selenium_helpers import logger
 
 
-def click_resumes():
-    search_page = setup_search()
+def _ensure_queries() -> List[str]:
+    if getattr(config, "search_queries", None):
+        return list(config.search_queries)
 
-    config.resume_records = []
+    if config.search_query:
+        return [config.search_query]
 
+    raise ValueError("SEARCH_QUERY environment variable is required")
+
+
+def _collect_for_query(query: str, known_general_ids: MutableSet[str]) -> int:
+    logger.info("Начинаем сбор резюме по запросу: %s", query)
+    search_page = setup_search(query)
     resume_limit = getattr(config, "resume_limit", 0)
+    saved_for_query = 0
 
-    while not resume_limit or len(config.resume_records) < resume_limit:
+    per_query_path = query_output_path(config.output_path, query)
+    per_query_ids = load_existing_ids(str(per_query_path))
+
+    while not resume_limit or saved_for_query < resume_limit:
         resumes_list = list(find_resumes(search_page))
         if not resumes_list:
-            raise Exception("Подходящих резюме не найдено.")
+            logger.info("Подходящих резюме не найдено для запроса '%s'", query)
+            break
 
         resume_links = search_page.extract_resume_links(resumes_list)
         if not resume_links:
@@ -24,7 +46,7 @@ def click_resumes():
             break
 
         for link in resume_links:
-            if resume_limit and len(config.resume_records) >= resume_limit:
+            if resume_limit and saved_for_query >= resume_limit:
                 logger.info("Достигнут лимит сбора резюме: %s", resume_limit)
                 break
 
@@ -37,24 +59,50 @@ def click_resumes():
             except Exception as error:  # pragma: no cover - depends on remote site
                 logger.exception("Не удалось распарсить резюме: %s", error)
             else:
-                config.resume_records.append(resume_data)
-                logger.info("Добавлено резюме: %s", resume_data.get("full_name", "Неизвестно"))
-                print(resume_data)
+                append_record(resume_data, path=str(per_query_path), known_ids=per_query_ids)
+                was_added = append_record(
+                    resume_data,
+                    path=config.output_path,
+                    known_ids=known_general_ids,
+                )
+                if was_added:
+                    saved_for_query += 1
+                    logger.info(
+                        "Добавлено резюме (%s) в общий файл", resume_data.get("full_name", "Неизвестно")
+                    )
+                else:
+                    logger.info(
+                        "Резюме уже было сохранено ранее: %s",
+                        resume_data.get("resume_id") or resume_data.get("url"),
+                    )
             finally:
                 config.driver.close()
                 config.driver.switch_to.window(config.driver.window_handles[0])
-
-        if resume_limit and len(config.resume_records) >= resume_limit:
-            logger.info("Достигнут лимит резюме: %s", resume_limit)
+        if resume_limit and saved_for_query >= resume_limit:
+            logger.info("Достигнут лимит резюме для запроса '%s'", query)
             break
 
         if not search_page.go_to_next_page():
             break
 
-    dataframe = build_dataframe(config.resume_records)
-    if not dataframe.empty:
-        save_dataframe(dataframe, config.output_path)
-        print(f"Всего сохранено резюме: {len(dataframe)}")
-        print(f"Файл с результатами: {config.output_path}")
-    else:
-        print("Не удалось собрать данные по резюме.")
+    logger.info("Итого новых резюме по '%s': %s", query, saved_for_query)
+    return saved_for_query
+
+
+def click_resumes():
+    queries = _ensure_queries()
+    known_general_ids = load_existing_ids(config.output_path)
+    saved_summary: Dict[str, int] = defaultdict(int)
+
+    for query in queries:
+        try:
+            saved_summary[query] = _collect_for_query(query, known_general_ids)
+        except Exception as error:  # pragma: no cover - depends on remote site
+            logger.exception("Ошибка при обработке запроса '%s': %s", query, error)
+
+    total_new = sum(saved_summary.values())
+    print("Результат сбора по запросам:")
+    for query, count in saved_summary.items():
+        print(f"  - {query}: {count} новых резюме")
+    print(f"Итого новых резюме добавлено: {total_new}")
+    print(f"Общий файл с результатами: {config.output_path}")

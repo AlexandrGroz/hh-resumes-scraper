@@ -2,8 +2,8 @@ from configs.config import config
 from pages.resumes.search_page import ResumeSearchPage
 
 
-def setup_search() -> ResumeSearchPage:
+def setup_search(query: str) -> ResumeSearchPage:
     page = ResumeSearchPage(config.driver)
-    search_value = (config.search_query or "").strip()
-    page.prepare_search(search_value)
+    page.open(config.resume_search_url)
+    page.prepare_search(query)
     return page
