@@ -1,23 +1,36 @@
+from __future__ import annotations
+
+import json
 import re
 from pathlib import Path
-from typing import Iterable, Mapping, MutableSet
+from typing import Any, Iterable, Mapping, MutableSet
 
 import pandas as pd
 
-import pandas as pd
+
+def _normalize_value(value: Any) -> Any:
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
 
-def build_dataframe(records: Iterable[Mapping[str, str]] | None) -> pd.DataFrame:
+def _normalize_record(record: Mapping[str, Any]) -> dict:
+    return {key: _normalize_value(value) for key, value in record.items()}
+
+
+def build_dataframe(records: Iterable[Mapping[str, Any]] | None) -> pd.DataFrame:
     if not records:
         return pd.DataFrame()
 
-    return pd.DataFrame(list(records))
+    normalized = [_normalize_record(record) for record in records]
+    return pd.DataFrame(normalized)
 
 
 def save_dataframe(dataframe: pd.DataFrame, output_path: str) -> None:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     dataframe.to_csv(output, index=False)
+
 
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^\w]+", "_", value.strip().lower())
@@ -48,7 +61,9 @@ def load_existing_ids(path: str) -> MutableSet[str]:
     return set(ids)
 
 
-def append_record(record: Mapping[str, str], *, path: str, known_ids: MutableSet[str]) -> bool:
+def append_record(
+    record: Mapping[str, Any], *, path: str, known_ids: MutableSet[str]
+) -> bool:
     resume_id = str(record.get("resume_id", "")).strip()
     if resume_id and resume_id in known_ids:
         return False
@@ -56,7 +71,8 @@ def append_record(record: Mapping[str, str], *, path: str, known_ids: MutableSet
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    dataframe = pd.DataFrame([record])
+    normalized = _normalize_record(record)
+    dataframe = pd.DataFrame([normalized])
     write_header = not output.exists()
     dataframe.to_csv(output, mode="a", header=write_header, index=False)
 
