@@ -1,81 +1,109 @@
-import time
+from __future__ import annotations
 
-from helpers.highlights import highlight_blocks
-from selenium.common import TimeoutException, NoSuchElementException
+from collections import defaultdict
+from typing import Dict, List, MutableSet
 
-from actions.resumes_actions.dataframe import build_dataframe, save_dataframe
+from actions.resumes_actions.dataframe import (
+    append_record,
+    load_existing_ids,
+    query_output_path,
+)
 from actions.resumes_actions.find_resumes import find_resumes
 from actions.resumes_actions.parse_resume import parse_resume
 from actions.resumes_actions.setup_search import setup_search
 from configs.config import config
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+from helpers.selenium_helpers import logger
 
 
-def click_resumes():
-    setup_search()
+def _ensure_queries() -> List[str]:
+    if getattr(config, "search_queries", None):
+        return list(config.search_queries)
 
-    has_next_page = True
+    if config.search_query:
+        return [config.search_query]
 
-    while has_next_page:
-        resumes_list = find_resumes()
+    raise ValueError("SEARCH_QUERY environment variable is required")
+
+
+def _collect_for_query(query: str, known_general_ids: MutableSet[str]) -> int:
+    logger.info("Начинаем сбор резюме по запросу: %s", query)
+    search_page = setup_search(query)
+    resume_limit = getattr(config, "resume_limit", 0)
+    saved_for_query = 0
+
+    per_query_path = query_output_path(config.output_path, query)
+    per_query_ids = load_existing_ids(str(per_query_path))
+
+    while not resume_limit or saved_for_query < resume_limit:
+        resumes_list = list(find_resumes(search_page))
         if not resumes_list:
-            raise Exception("Подходящих резюме не найдено.")
+            logger.info("Подходящих резюме не найдено для запроса '%s'", query)
+            break
 
-        resume_links = []
-        for resume in resumes_list:
-            try:
-                apply_button = resume.find_element(By.XPATH, './/a[@data-qa="serp-item__title"]')
-                highlight_blocks([apply_button])   # лучше всегда передавать список
-                resume_links.append(apply_button.get_attribute('href'))
-            except Exception as e:
-                print(f"Не удалось найти ссылку в карточке: {e}")
+        resume_links = search_page.extract_resume_links(resumes_list)
+        if not resume_links:
+            logger.info("На странице не найдено ссылок на резюме")
+            break
 
         for link in resume_links:
+            if resume_limit and saved_for_query >= resume_limit:
+                logger.info("Достигнут лимит сбора резюме: %s", resume_limit)
+                break
+
+            logger.info("Открываем резюме в новой вкладке: %s", link)
             config.driver.execute_script("window.open(arguments[0], '_blank');", link)
             config.driver.switch_to.window(config.driver.window_handles[-1])
 
             try:
                 resume_data = parse_resume()
-                config.resume_records.append(resume_data)
-                print(resume_data)
-                print(f"Добавлено резюме: {resume_data.get('full_name', 'Неизвестно')}")
+            except Exception as error:  # pragma: no cover - depends on remote site
+                logger.exception("Не удалось распарсить резюме: %s", error)
+            else:
+                append_record(resume_data, path=str(per_query_path), known_ids=per_query_ids)
+                was_added = append_record(
+                    resume_data,
+                    path=config.output_path,
+                    known_ids=known_general_ids,
+                )
+                if was_added:
+                    saved_for_query += 1
+                    logger.info(
+                        "Добавлено резюме (%s) в общий файл", resume_data.get("full_name", "Неизвестно")
+                    )
+                else:
+                    logger.info(
+                        "Резюме уже было сохранено ранее: %s",
+                        resume_data.get("resume_id") or resume_data.get("url"),
+                    )
             finally:
                 config.driver.close()
                 config.driver.switch_to.window(config.driver.window_handles[0])
 
-        has_next_page = go_to_next_page()
+        if resume_limit and saved_for_query >= resume_limit:
+            logger.info("Достигнут лимит резюме для запроса '%s'", query)
+            break
 
-    dataframe = build_dataframe(config.resume_records)
-    if not dataframe.empty:
-        save_dataframe(dataframe, config.output_path)
-        print(f"Всего сохранено резюме: {len(dataframe)}")
-        print(f"Файл с результатами: {config.output_path}")
-    else:
-        print("Не удалось собрать данные по резюме.")
+        if not search_page.go_to_next_page():
+            break
+
+    logger.info("Итого новых резюме по '%s': %s", query, saved_for_query)
+    return saved_for_query
 
 
+def click_resumes():
+    queries = _ensure_queries()
+    known_general_ids = load_existing_ids(config.output_path)
+    saved_summary: Dict[str, int] = defaultdict(int)
 
-def go_to_next_page():
-    try:
-        next_button = config.driver.find_element(By.XPATH, '//a[@data-qa="pager-next"]')
-    except NoSuchElementException:
-        return False
+    for query in queries:
+        try:
+            saved_summary[query] = _collect_for_query(query, known_general_ids)
+        except Exception as error:  # pragma: no cover - depends on remote site
+            logger.exception("Ошибка при обработке запроса '%s': %s", query, error)
 
-    classes = (next_button.get_attribute('class') or '').lower()
-    if 'disabled' in classes:
-        return False
-
-    config.driver.execute_script("arguments[0].click()", next_button)
-    try:
-        config.wait.until(EC.staleness_of(next_button))
-        config.wait.until(
-            EC.presence_of_all_elements_located(
-                (By.XPATH, '//div[contains(@data-qa, "resume-serp__resume") and @data-resume-id]')
-            )
-        )
-    except TimeoutException:
-        return False
-
-    time.sleep(1)
-    return True
+    total_new = sum(saved_summary.values())
+    print("Результат сбора по запросам:")
+    for query, count in saved_summary.items():
+        print(f"  - {query}: {count} новых резюме")
+    print(f"Итого новых резюме добавлено: {total_new}")
+    print(f"Общий файл с результатами: {config.output_path}")
