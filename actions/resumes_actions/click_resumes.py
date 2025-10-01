@@ -1,50 +1,54 @@
-import time
-
-from helpers.highlights import highlight_blocks
-from selenium.common import TimeoutException, NoSuchElementException
-
 from actions.resumes_actions.dataframe import build_dataframe, save_dataframe
 from actions.resumes_actions.find_resumes import find_resumes
 from actions.resumes_actions.parse_resume import parse_resume
 from actions.resumes_actions.setup_search import setup_search
 from configs.config import config
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
+from helpers.selenium_helpers import logger
 
 
 def click_resumes():
-    setup_search()
+    search_page = setup_search()
+    config.resume_records = []
 
-    has_next_page = True
+    resume_limit = getattr(config, "resume_limit", 0)
 
-    while has_next_page:
-        resumes_list = find_resumes()
+    while not resume_limit or len(config.resume_records) < resume_limit:
+        resumes_list = list(find_resumes(search_page))
         if not resumes_list:
             raise Exception("Подходящих резюме не найдено.")
 
-        resume_links = []
-        for resume in resumes_list:
-            try:
-                apply_button = resume.find_element(By.XPATH, './/a[@data-qa="serp-item__title"]')
-                highlight_blocks([apply_button])   # лучше всегда передавать список
-                resume_links.append(apply_button.get_attribute('href'))
-            except Exception as e:
-                print(f"Не удалось найти ссылку в карточке: {e}")
+        resume_links = search_page.extract_resume_links(resumes_list)
+        if not resume_links:
+            logger.info("На странице не найдено ссылок на резюме")
+            break
 
         for link in resume_links:
+            if resume_limit and len(config.resume_records) >= resume_limit:
+                logger.info("Достигнут лимит сбора резюме: %s", resume_limit)
+                break
+
+            logger.info("Открываем резюме в новой вкладке: %s", link)
             config.driver.execute_script("window.open(arguments[0], '_blank');", link)
             config.driver.switch_to.window(config.driver.window_handles[-1])
 
             try:
                 resume_data = parse_resume()
+            except Exception as error:  # pragma: no cover - depends on remote site
+                logger.exception("Не удалось распарсить резюме: %s", error)
+            else:
                 config.resume_records.append(resume_data)
+                logger.info("Добавлено резюме: %s", resume_data.get("full_name", "Неизвестно"))
                 print(resume_data)
-                print(f"Добавлено резюме: {resume_data.get('full_name', 'Неизвестно')}")
             finally:
                 config.driver.close()
                 config.driver.switch_to.window(config.driver.window_handles[0])
 
-        has_next_page = go_to_next_page()
+        if resume_limit and len(config.resume_records) >= resume_limit:
+            logger.info("Достигнут лимит резюме: %s", resume_limit)
+            break
+
+        if not search_page.go_to_next_page():
+            break
 
     dataframe = build_dataframe(config.resume_records)
     if not dataframe.empty:
@@ -53,29 +57,3 @@ def click_resumes():
         print(f"Файл с результатами: {config.output_path}")
     else:
         print("Не удалось собрать данные по резюме.")
-
-
-
-def go_to_next_page():
-    try:
-        next_button = config.driver.find_element(By.XPATH, '//a[@data-qa="pager-next"]')
-    except NoSuchElementException:
-        return False
-
-    classes = (next_button.get_attribute('class') or '').lower()
-    if 'disabled' in classes:
-        return False
-
-    config.driver.execute_script("arguments[0].click()", next_button)
-    try:
-        config.wait.until(EC.staleness_of(next_button))
-        config.wait.until(
-            EC.presence_of_all_elements_located(
-                (By.XPATH, '//div[contains(@data-qa, "resume-serp__resume") and @data-resume-id]')
-            )
-        )
-    except TimeoutException:
-        return False
-
-    time.sleep(1)
-    return True

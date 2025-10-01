@@ -1,12 +1,11 @@
+from typing import Iterable
+
+from selenium.webdriver.remote.webelement import WebElement
+
 from configs.config import config
-from selenium.webdriver.common.by import By
-from helpers.highlights import highlight_blocks
+from pages.resumes.search_page import ResumeSearchPage
 
 
-def find_resumes():
-    resumes = config.driver.find_elements(
-        By.XPATH,
-        '//div[contains(@data-qa, "resume-serp__resume") and @data-resume-id]'
-    )
-    highlight_blocks(resumes)
-    return resumes
+def find_resumes(search_page: ResumeSearchPage | None = None) -> Iterable[WebElement]:
+    page = search_page or ResumeSearchPage(config.driver)
+    return page.get_resume_cards()
