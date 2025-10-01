@@ -4,6 +4,8 @@ from typing import Iterable, Mapping, MutableSet
 
 import pandas as pd
 
+import pandas as pd
+
 
 def build_dataframe(records: Iterable[Mapping[str, str]] | None) -> pd.DataFrame:
     if not records:
@@ -16,7 +18,6 @@ def save_dataframe(dataframe: pd.DataFrame, output_path: str) -> None:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     dataframe.to_csv(output, index=False)
-
 
 def _slugify(value: str) -> str:
     slug = re.sub(r"[^\w]+", "_", value.strip().lower())

@@ -78,7 +78,6 @@ def _collect_for_query(query: str, known_general_ids: MutableSet[str]) -> int:
             finally:
                 config.driver.close()
                 config.driver.switch_to.window(config.driver.window_handles[0])
-
         if resume_limit and saved_for_query >= resume_limit:
             logger.info("Достигнут лимит резюме для запроса '%s'", query)
             break
