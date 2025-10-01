@@ -8,6 +8,7 @@ from helpers.selenium_helpers import logger
 
 def click_resumes():
     search_page = setup_search()
+
     config.resume_records = []
 
     resume_limit = getattr(config, "resume_limit", 0)
