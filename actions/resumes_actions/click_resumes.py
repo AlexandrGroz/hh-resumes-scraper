@@ -5,6 +5,7 @@ from typing import Dict, List, MutableSet
 
 from actions.resumes_actions.dataframe import (
     append_record,
+    count_records,
     load_existing_ids,
     query_output_path,
 )
@@ -32,7 +33,19 @@ def _collect_for_query(query: str, known_general_ids: MutableSet[str]) -> int:
     saved_for_query = 0
 
     per_query_path = query_output_path(config.output_path, query)
-    per_query_ids = load_existing_ids(str(per_query_path))
+    per_query_path_str = str(per_query_path)
+    per_query_ids = load_existing_ids(per_query_path_str)
+
+    existing_records = count_records(per_query_path_str)
+    threshold = getattr(config, "existing_record_threshold", 1500)
+    if existing_records >= threshold:
+        logger.info(
+            "Пропускаем запрос '%s' — найдено %s записей (порог %s)",
+            query,
+            existing_records,
+            threshold,
+        )
+        return 0
 
     while not resume_limit or saved_for_query < resume_limit:
         resumes_list = list(find_resumes(search_page))
@@ -59,7 +72,7 @@ def _collect_for_query(query: str, known_general_ids: MutableSet[str]) -> int:
             except Exception as error:  # pragma: no cover - depends on remote site
                 logger.exception("Не удалось распарсить резюме: %s", error)
             else:
-                append_record(resume_data, path=str(per_query_path), known_ids=per_query_ids)
+                append_record(resume_data, path=per_query_path_str, known_ids=per_query_ids)
                 was_added = append_record(
                     resume_data,
                     path=config.output_path,

@@ -34,6 +34,9 @@ class Config:
             )
             cls._instance.limit = int(os.getenv("LIMIT", "0") or 0)
             cls._instance.resume_limit = int(os.getenv("RESUME_LIMIT", "500") or 500)
+            cls._instance.existing_record_threshold = int(
+                os.getenv("EXISTING_RECORD_LIMIT", "1500") or 1500
+            )
             cls._instance.resume_records = []
             cls._instance.output_path = os.getenv("OUTPUT_PATH", "data/resumes.csv")
             resume_search_url = os.getenv("RESUME_SEARCH_URL")
