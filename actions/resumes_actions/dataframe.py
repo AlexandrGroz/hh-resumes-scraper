@@ -80,3 +80,16 @@ def append_record(
         known_ids.add(resume_id)
 
     return True
+
+
+def count_records(path: str) -> int:
+    output = Path(path)
+    if not output.exists():
+        return 0
+
+    try:
+        dataframe = pd.read_csv(output)
+    except pd.errors.EmptyDataError:
+        return 0
+
+    return len(dataframe.index)
