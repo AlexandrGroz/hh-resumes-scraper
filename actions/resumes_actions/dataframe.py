@@ -8,6 +8,13 @@ from typing import Any, Iterable, Mapping, MutableSet
 import pandas as pd
 
 
+def _read_csv_with_fallback(path: Path, **kwargs: Any) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path, **kwargs)
+    except pd.errors.ParserError:
+        return pd.read_csv(path, engine="python", on_bad_lines="skip", **kwargs)
+
+
 def _normalize_value(value: Any) -> Any:
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
@@ -50,7 +57,7 @@ def load_existing_ids(path: str) -> MutableSet[str]:
         return set()
 
     try:
-        dataframe = pd.read_csv(output)
+        dataframe = _read_csv_with_fallback(output)
     except pd.errors.EmptyDataError:
         return set()
 
@@ -72,8 +79,35 @@ def append_record(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     normalized = _normalize_record(record)
-    dataframe = pd.DataFrame([normalized])
-    write_header = not output.exists()
+
+    existing_columns: list[str] = []
+    if output.exists():
+        try:
+            header = _read_csv_with_fallback(output, nrows=0)
+        except pd.errors.EmptyDataError:
+            header = pd.DataFrame()
+        existing_columns = list(header.columns)
+
+    normalized_keys = list(normalized.keys())
+    if existing_columns:
+        new_columns = [column for column in normalized_keys if column not in existing_columns]
+        columns = [*existing_columns, *new_columns]
+
+        if new_columns:
+            try:
+                existing_dataframe = _read_csv_with_fallback(output)
+            except pd.errors.EmptyDataError:
+                existing_dataframe = pd.DataFrame(columns=existing_columns)
+
+            existing_dataframe = existing_dataframe.reindex(columns=columns)
+            existing_dataframe = existing_dataframe.fillna("")
+            existing_dataframe.to_csv(output, index=False)
+    else:
+        columns = normalized_keys
+
+    dataframe = pd.DataFrame([normalized]).reindex(columns=columns)
+    dataframe = dataframe.fillna("")
+    write_header = not output.exists() or not existing_columns
     dataframe.to_csv(output, mode="a", header=write_header, index=False)
 
     if resume_id:
@@ -88,7 +122,7 @@ def count_records(path: str) -> int:
         return 0
 
     try:
-        dataframe = pd.read_csv(output)
+        dataframe = _read_csv_with_fallback(output)
     except pd.errors.EmptyDataError:
         return 0
 
